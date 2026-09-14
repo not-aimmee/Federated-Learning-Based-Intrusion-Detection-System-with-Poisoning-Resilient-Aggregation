@@ -1,0 +1,67 @@
+# Virtual environments
+venv/
+venv311/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+build/
+dist/
+*.egg-link
+
+# Flower-specific
+.flwr/
+*.fab
+.venv_flwr/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data — this is the big one for you
+data/raw/
+data/processed/
+data/dummy/
+*.csv
+*.parquet
+!data/README.md
+
+# Model artifacts / checkpoints
+*.pkl
+*.joblib
+*.h5
+*.pt
+*.onnx
+models/checkpoints/
+
+# Logs and results
+*.log
+results/*.csv
+!results/.gitkeep
+
+# Environment variables / secrets
+.env
+*.pem
+*.key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS-specific (Windows)
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# OS-specific (Mac, in case teammates use it)
+.DS_Store
+
+# Ray (simulation backend can dump temp files)
+ray_results/
+/tmp/ray/
