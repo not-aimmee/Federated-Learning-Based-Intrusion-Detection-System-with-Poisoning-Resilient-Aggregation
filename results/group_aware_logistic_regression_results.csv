@@ -1,0 +1,2 @@
+Model,Test Accuracy,Test Balanced Accuracy,Test Macro F1,Test Weighted F1
+Group-Aware Logistic Regression,0.942844003417387,0.29651169329953897,0.31315753120764706,0.9386067910210788

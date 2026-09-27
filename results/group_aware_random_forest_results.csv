@@ -1,0 +1,2 @@
+Model,Validation Accuracy,Validation Balanced Accuracy,Validation Macro F1,Validation Weighted F1,Test Accuracy,Test Balanced Accuracy,Test Macro F1,Test Weighted F1
+Group-Aware Random Forest,0.9983924199926658,0.8251702630972784,0.8409951246101198,0.9983721199656006,0.9985152999431096,0.845962633354704,0.8691295050798719,0.9984991066129518

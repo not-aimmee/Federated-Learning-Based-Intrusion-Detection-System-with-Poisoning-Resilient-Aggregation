@@ -1,0 +1,3 @@
+Model,Split,Accuracy,Balanced Accuracy,Macro F1
+Federated Logistic Regression,Validation,0.9716621901543158,0.4518489600856871,0.4620871447212053
+Federated Logistic Regression,Test,0.9717688942453502,0.45177878013112155,0.4656539075469109

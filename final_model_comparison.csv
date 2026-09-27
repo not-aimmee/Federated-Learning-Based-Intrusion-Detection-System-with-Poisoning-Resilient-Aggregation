@@ -1,0 +1,7 @@
+Model,Split,Accuracy,Balanced Accuracy,Macro F1
+Baseline Logistic Regression,Test,0.941729,0.294528,0.309474
+Balanced Logistic Regression,Test,0.643396,0.830064,0.274074
+Original Random Forest,Test,0.998151,0.848884,0.871359
+Group-Aware Logistic Regression,Test,0.942844,0.296512,0.313158
+Group-Aware Random Forest,Test,0.998515,0.845963,0.86913
+Federated Logistic Regression,Test,0.9717688942453502,0.45177878013112155,0.4656539075469109
