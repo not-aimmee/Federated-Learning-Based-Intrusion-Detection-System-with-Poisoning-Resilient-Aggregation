@@ -1,0 +1,1 @@
+"""sklearnexample: federated intrusion detection with poisoning-resilient aggregation."""

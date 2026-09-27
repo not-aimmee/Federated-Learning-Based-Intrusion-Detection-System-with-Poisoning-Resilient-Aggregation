@@ -1,0 +1,5 @@
+flower framework works exactly like vite, you need to install it and setup using the command "pip install -U flwr" 
+after that you need to select the library you're using for the project, using which flower will create  a project template for your project
+using this template, you will then build your project
+
+flower documentation : https://flower.ai/docs/framework/tutorial-series-what-is-federated-learning.html

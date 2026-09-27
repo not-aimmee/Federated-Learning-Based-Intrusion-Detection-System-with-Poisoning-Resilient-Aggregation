@@ -1,0 +1,7 @@
+# generated data and results (large / reproducible)
+data/
+results/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.pkl
