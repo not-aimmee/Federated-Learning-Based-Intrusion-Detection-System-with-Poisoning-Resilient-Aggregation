@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 data/CICIDS2017_cleaned.csv
 data/splits/
+data/*.csv
