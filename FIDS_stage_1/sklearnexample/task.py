@@ -20,7 +20,7 @@ from pathlib import Path
 
 import numpy as np
 from sklearn.linear_model import SGDClassifier
-from sklearn.metrics import log_loss
+from sklearn.metrics import balanced_accuracy_score, f1_score, log_loss
 
 from sklearnexample.config import data_dir as default_data_dir
 
@@ -170,6 +170,9 @@ def compute_metrics(y_true, y_pred) -> dict[str, float]:
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return {
         "accuracy": float(np.mean(y_true == y_pred)),
+        "balanced_accuracy": float(balanced_accuracy_score(y_true, y_pred)),
+        "macro_f1": float(f1_score(y_true, y_pred, average="macro", zero_division=0)),
+        "weighted_f1": float(f1_score(y_true, y_pred, average="weighted", zero_division=0)),
         "precision": float(precision),
         "recall": float(recall),
         "f1": float(f1),
