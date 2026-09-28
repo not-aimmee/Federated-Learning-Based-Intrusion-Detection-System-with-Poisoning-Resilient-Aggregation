@@ -158,6 +158,8 @@ def main() -> None:
     summary.to_csv(res / "summary.csv", index=False)
     central_path = res / "centralized" / "metrics.csv"
     central = pd.read_csv(central_path) if central_path.exists() else None
+    if central is not None and "split" in central.columns:
+        central = central[central["split"] == "test"].drop(columns="split")  # benchmark = held-out test
 
     plot_convergence(df, central, fig_dir)
     plot_overhead(summary, fig_dir)

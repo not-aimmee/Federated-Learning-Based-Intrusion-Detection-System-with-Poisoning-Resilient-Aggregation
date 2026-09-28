@@ -1,0 +1,18 @@
+# environments / caches
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# data + generated results are large and reproducible: keep the folders, not the contents.
+# (Flower also honours this file when it packages the app, so multi-GB CSVs are never bundled.)
+data/*/*
+!data/*/.gitkeep
+results/*
+!results/.gitkeep
+reports/*
+!reports/.gitkeep
+*.pkl
+*.npy
