@@ -6,10 +6,10 @@
 Sources
     legacy/results/final_model_benchmark.csv   TM2's earlier single-machine experiments
     results/centralized/benchmark.csv          Checkpoint 3 (this repo's centralized baselines)
-    results/runs/*/rounds.csv                  Checkpoint 4 (final round of each clean federated run)
+    results/runs/*/rounds.csv                  Checkpoint 4 (final and best-macro-F1 rounds)
 
 Output
-    results/stage1_comparison.csv   Model / Source / Split / Accuracy / Balanced Accuracy / Macro F1 / Weighted F1
+    results/stage1_comparison.csv   includes final and best-macro-F1 rounds for each federated run
 """
 
 from __future__ import annotations
@@ -20,7 +20,10 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-COLS = ["Model", "Source", "Split", "Accuracy", "Balanced Accuracy", "Macro F1", "Weighted F1"]
+COLS = [
+    "Model", "Source", "Split", "Selection", "Round", "Accuracy",
+    "Balanced Accuracy", "Macro F1", "Weighted F1",
+]
 
 
 def legacy_rows(path: Path) -> list[dict]:
@@ -29,6 +32,7 @@ def legacy_rows(path: Path) -> list[dict]:
     df = pd.read_csv(path)
     return [
         {"Model": r["Model"], "Source": "legacy", "Split": "test",
+         "Selection": "", "Round": "",
          "Accuracy": r["Test Accuracy"], "Balanced Accuracy": r["Test Balanced Accuracy"],
          "Macro F1": r["Test Macro F1"], "Weighted F1": r["Test Weighted F1"]}
         for _, r in df.iterrows()
@@ -40,27 +44,38 @@ def centralized_rows(path: Path) -> list[dict]:
         return []
     df = pd.read_csv(path)
     df["Source"] = "checkpoint3"
-    return df.assign(Split=df["Split"].str.lower())[COLS].to_dict("records")
+    df = df.assign(Split=df["Split"].str.lower(), Selection="", Round="")
+    return df[COLS].to_dict("records")
 
 
 def federated_rows(runs_dir: Path) -> list[dict]:
     rows = []
     for f in sorted(runs_dir.glob("*/rounds.csv")):
-        df = pd.read_csv(f)
+        df = pd.read_csv(f).sort_values("round", kind="stable")
         if df.empty or str(df["attack"].iloc[-1]) != "none":
             continue  # attacked runs belong to Stage 2
         last = df.iloc[-1]
         if "balanced_accuracy" not in df.columns:
             continue  # produced before the metrics upgrade - re-run it
+        trained = df[df["round"] > 0]
+        if trained.empty or "macro_f1" not in trained.columns:
+            continue
+        best = trained.loc[trained["macro_f1"].idxmax()]
         n = int(last["clients"]) if pd.notna(last.get("clients")) else "?"
         alpha = float(last["partition_alpha"])
         dist = "IID" if alpha <= 0 else f"non-IID a={alpha:g}"
-        rows.append({
-            "Model": f"Federated logistic_sgd ({last['aggregation']}, {n} clients, {dist}, {int(last['round'])} rounds)",
-            "Source": "checkpoint4", "Split": "test", "Accuracy": last["accuracy"],
-            "Balanced Accuracy": last["balanced_accuracy"], "Macro F1": last["macro_f1"],
-            "Weighted F1": last["weighted_f1"],
-        })
+        model = (
+            f"Federated logistic_sgd ({last['aggregation']}, {n} clients, "
+            f"{dist}, {int(last['round'])} rounds)"
+        )
+        for selection, result in (("final", last), ("best_test_macro_f1", best)):
+            rows.append({
+                "Model": model, "Source": "checkpoint4", "Split": "test",
+                "Selection": selection, "Round": int(result["round"]),
+                "Accuracy": result["accuracy"],
+                "Balanced Accuracy": result["balanced_accuracy"],
+                "Macro F1": result["macro_f1"], "Weighted F1": result["weighted_f1"],
+            })
     return rows
 
 

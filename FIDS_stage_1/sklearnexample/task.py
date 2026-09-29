@@ -50,6 +50,14 @@ def _arrays(data_dir: str) -> dict[str, np.ndarray]:
     return {k: np.load(Path(data_dir) / f"{k}.npy", mmap_mode="r") for k in _FILES}
 
 
+@lru_cache(maxsize=2)
+def _balanced_class_weights(data_dir: str) -> tuple[tuple[int, float], ...]:
+    y_train = np.asarray(_arrays(data_dir)["y_train"], dtype=np.int64)
+    classes, counts = np.unique(y_train, return_counts=True)
+    weights = len(y_train) / (len(classes) * counts)
+    return tuple((int(label), float(weight)) for label, weight in zip(classes, weights))
+
+
 @lru_cache(maxsize=16)
 def _partitions(data_dir: str, num_partitions: int, alpha: float, seed: int):
     """Split training-row indices across clients (IID if alpha <= 0, else Dirichlet)."""
@@ -115,13 +123,19 @@ def load_test_data(data_dir: str | None = None):
 
 # -------------------------------------------------------------------------- model
 def create_model(
-    n_features: int, n_classes: int, learning_rate: float = 0.01, seed: int = 42
+    n_features: int,
+    n_classes: int,
+    learning_rate: float = 0.01,
+    seed: int = 42,
+    data_dir: str | Path | None = None,
 ) -> SGDClassifier:
     """Logistic regression (SGD) with all-zero initial parameters."""
+    class_weight = dict(_balanced_class_weights(_resolve(data_dir)))
     model = SGDClassifier(
         loss="log_loss",
         penalty="l2",
         alpha=1e-5,
+        class_weight=class_weight,
         learning_rate="constant",
         eta0=learning_rate,
         random_state=seed,

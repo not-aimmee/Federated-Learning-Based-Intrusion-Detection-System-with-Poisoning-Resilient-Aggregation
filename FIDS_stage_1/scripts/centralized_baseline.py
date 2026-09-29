@@ -72,7 +72,9 @@ def main() -> None:
         print(f"\n== {name}")
         t0 = time.perf_counter()
         if name == "logistic_sgd":
-            model = create_model(meta["n_features"], meta["n_classes"], args.learning_rate, args.seed)
+            model = create_model(
+                meta["n_features"], meta["n_classes"], args.learning_rate, args.seed, data_dir=d
+            )
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 train_local(model, X_tr.astype(np.float64), y_tr, args.sgd_epochs)

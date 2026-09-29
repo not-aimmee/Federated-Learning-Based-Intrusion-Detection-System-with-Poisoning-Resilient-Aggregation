@@ -63,7 +63,9 @@ def main(grid: Grid, context: Context) -> None:
     )
 
     # Global model used for centralised evaluation on the held-out test set.
-    eval_model = create_model(meta["n_features"], meta["n_classes"], seed=int(cfg["seed"]))
+    eval_model = create_model(
+        meta["n_features"], meta["n_classes"], seed=int(cfg["seed"]), data_dir=ddir
+    )
 
     def evaluate_fn(server_round: int, arrays: ArrayRecord) -> MetricRecord:
         set_model_params(eval_model, arrays.to_numpy_ndarrays())
@@ -86,7 +88,9 @@ def main(grid: Grid, context: Context) -> None:
     )
 
     initial = ArrayRecord(
-        get_model_params(create_model(meta["n_features"], meta["n_classes"], seed=int(cfg["seed"])))
+        get_model_params(create_model(
+            meta["n_features"], meta["n_classes"], seed=int(cfg["seed"]), data_dir=ddir
+        ))
     )
     result = strategy.start(
         grid=grid,

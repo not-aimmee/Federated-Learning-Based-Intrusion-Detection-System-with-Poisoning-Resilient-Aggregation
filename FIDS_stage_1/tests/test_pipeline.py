@@ -12,8 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from sklearnexample.task import compute_metrics  # noqa: E402
+from sklearnexample.task import compute_metrics, create_model  # noqa: E402
 import prepare_from_splits  # noqa: E402
+import build_benchmark  # noqa: E402
 
 
 def _write_splits(dir_: Path, leak: bool = False) -> None:
@@ -40,6 +41,40 @@ def test_metrics_multiclass_and_binary_views():
     for k in ("balanced_accuracy", "macro_f1", "weighted_f1", "precision", "recall", "f1", "fpr"):
         assert 0.0 <= m[k] <= 1.0
     assert m["fpr"] == pytest.approx(0.5)  # 1 of 2 benign flagged as attack
+
+
+def test_create_model_uses_balanced_weights_with_partial_fit(tmp_path):
+    y_train = np.array([0, 0, 0, 1, 1])
+    np.save(tmp_path / "X_train.npy", np.zeros((len(y_train), 2)))
+    np.save(tmp_path / "y_train.npy", y_train)
+    np.save(tmp_path / "X_test.npy", np.zeros((1, 2)))
+    np.save(tmp_path / "y_test.npy", np.array([0]))
+
+    model = create_model(2, 2, data_dir=tmp_path)
+
+    assert model.class_weight == pytest.approx({0: 5 / 6, 1: 1.25})
+
+
+def test_federated_benchmark_reports_best_and_final_rounds(tmp_path):
+    run_dir = tmp_path / "run1"
+    run_dir.mkdir()
+    pd.DataFrame([
+        {"attack": "none", "round": 0, "aggregation": "fedavg", "clients": 3,
+         "partition_alpha": 0, "accuracy": 0.7, "balanced_accuracy": 0.3,
+         "macro_f1": 0.2, "weighted_f1": 0.6},
+        {"attack": "none", "round": 1, "aggregation": "fedavg", "clients": 3,
+         "partition_alpha": 0, "accuracy": 0.8, "balanced_accuracy": 0.6,
+         "macro_f1": 0.5, "weighted_f1": 0.75},
+        {"attack": "none", "round": 2, "aggregation": "fedavg", "clients": 3,
+         "partition_alpha": 0, "accuracy": 0.85, "balanced_accuracy": 0.55,
+         "macro_f1": 0.45, "weighted_f1": 0.8},
+    ]).to_csv(run_dir / "rounds.csv", index=False)
+
+    rows = build_benchmark.federated_rows(tmp_path)
+
+    assert [row["Selection"] for row in rows] == ["final", "best_test_macro_f1"]
+    assert [row["Round"] for row in rows] == [2, 1]
+    assert [row["Macro F1"] for row in rows] == [0.45, 0.5]
 
 
 def test_prepare_from_splits_multiclass(tmp_path):

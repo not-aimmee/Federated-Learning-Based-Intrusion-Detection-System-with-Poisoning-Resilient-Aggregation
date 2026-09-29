@@ -31,7 +31,8 @@ def _setup(msg: Message, context: Context):
     data_dir = str(cfg["data-dir"])
     meta = load_meta(data_dir)
     model = create_model(
-        meta["n_features"], meta["n_classes"], float(cfg["learning-rate"]), int(cfg["seed"])
+        meta["n_features"], meta["n_classes"], float(cfg["learning-rate"]), int(cfg["seed"]),
+        data_dir=data_dir,
     )
     set_model_params(model, msg.content["arrays"].to_numpy_ndarrays())
     pid = int(context.node_config["partition-id"])
