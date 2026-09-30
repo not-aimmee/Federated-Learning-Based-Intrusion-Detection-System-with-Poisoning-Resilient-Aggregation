@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import csv
 import itertools
+import os
 import shutil
 import subprocess
 import sys
@@ -126,6 +127,8 @@ def main() -> None:
     flwr = shutil.which("flwr") or str(Path(sys.executable).parent / "flwr")
     log_dir = ROOT / "results" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
+    flwr_env = os.environ.copy()
+    flwr_env["PYTHONIOENCODING"] = "utf-8"
     current_clients = None
     failures = []
 
@@ -138,15 +141,27 @@ def main() -> None:
             cmd = [flwr, "federation", "simulation-config", "--num-supernodes", str(run["clients"])]
             if args.cpus_per_client:
                 cmd += ["--client-resources-num-cpus", str(args.cpus_per_client)]
-            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            try:
+                subprocess.run(cmd, check=True, capture_output=True, text=True,
+                               encoding="utf-8", env=flwr_env)
+            except subprocess.CalledProcessError as exc:
+                print(f"Flower command failed with exit code {exc.returncode}: {exc.cmd}", file=sys.stderr)
+                if exc.stdout:
+                    print(exc.stdout, file=sys.stderr, end="" if exc.stdout.endswith("\n") else "\n")
+                if exc.stderr:
+                    print(exc.stderr, file=sys.stderr, end="" if exc.stderr.endswith("\n") else "\n")
+                raise
             current_clients = run["clients"]
 
         cfg = " ".join(f"{k}={fmt(v)}" for k, v in run["config"].items())
         cmd = [flwr, "run", str(ROOT), "--stream", "--run-config", cfg]
         print(f"[{i}/{len(runs)}] running     {name} ...", end=" ", flush=True)
         t0 = time.perf_counter()
-        proc = subprocess.run(cmd, capture_output=True, text=True)
-        (log_dir / f"{name}.log").write_text(proc.stdout + "\n" + proc.stderr)
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                      encoding="utf-8", env=flwr_env)
+        (log_dir / f"{name}.log").write_text(
+            proc.stdout + "\n" + proc.stderr, encoding="utf-8"
+        )
         ok = proc.returncode == 0 and is_finished(name, args.rounds)
         print(f"{'ok' if ok else 'FAILED'} ({time.perf_counter() - t0:.0f}s)")
         if not ok:

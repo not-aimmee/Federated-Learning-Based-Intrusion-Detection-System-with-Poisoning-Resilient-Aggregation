@@ -120,6 +120,17 @@ def load_test_data(data_dir: str | None = None):
         np.asarray(arrays["y_test"], dtype=np.int64),
     )
 
+_FILES = ("X_train", "y_train", "X_test", "y_test", "X_val", "y_val")  # add X_val, y_val
+
+@lru_cache(maxsize=2)
+def load_validation_data(data_dir: str | None = None):
+    """Held-out global validation set (used only to pick the best round, never for tuning weights)."""
+    arrays = _arrays(_resolve(data_dir))
+    return (
+        np.asarray(arrays["X_val"], dtype=np.float64),
+        np.asarray(arrays["y_val"], dtype=np.int64),
+    )
+
 
 # -------------------------------------------------------------------------- model
 def create_model(

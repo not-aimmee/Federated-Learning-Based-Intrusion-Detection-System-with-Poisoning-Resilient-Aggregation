@@ -60,7 +60,9 @@ def federated_rows(runs_dir: Path) -> list[dict]:
         trained = df[df["round"] > 0]
         if trained.empty or "macro_f1" not in trained.columns:
             continue
-        best = trained.loc[trained["macro_f1"].idxmax()]
+        if "val_macro_f1" not in df.columns:
+            continue  # re-run with the validation-logging fix
+        best = trained.loc[trained["val_macro_f1"].idxmax()]
         n = int(last["clients"]) if pd.notna(last.get("clients")) else "?"
         alpha = float(last["partition_alpha"])
         dist = "IID" if alpha <= 0 else f"non-IID a={alpha:g}"
@@ -68,7 +70,7 @@ def federated_rows(runs_dir: Path) -> list[dict]:
             f"Federated logistic_sgd ({last['aggregation']}, {n} clients, "
             f"{dist}, {int(last['round'])} rounds)"
         )
-        for selection, result in (("final", last), ("best_test_macro_f1", best)):
+        for selection, result in (("final", last), ("best_val_macro_f1", best)):
             rows.append({
                 "Model": model, "Source": "checkpoint4", "Split": "test",
                 "Selection": selection, "Round": int(result["round"]),

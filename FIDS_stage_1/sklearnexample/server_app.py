@@ -20,6 +20,7 @@ from sklearnexample.task import (
     get_model_params,
     load_meta,
     load_test_data,
+    load_validation_data,
     set_model_params,
 )
 
@@ -32,6 +33,7 @@ def main(grid: Grid, context: Context) -> None:
     ddir = cfg["data-dir"]
     meta = load_meta(ddir)
     X_test, y_test = load_test_data(ddir)
+    X_val, y_val = load_validation_data(ddir)
 
     mal_frac = float(cfg["malicious-fraction"])
     attack = str(cfg["attack"])
@@ -69,9 +71,11 @@ def main(grid: Grid, context: Context) -> None:
 
     def evaluate_fn(server_round: int, arrays: ArrayRecord) -> MetricRecord:
         set_model_params(eval_model, arrays.to_numpy_ndarrays())
+        val_loss, val_metrics = evaluate_model(eval_model, X_val, y_val)
         loss, metrics = evaluate_model(eval_model, X_test, y_test)
-        strategy.log_round(server_round, loss, metrics)
-        return MetricRecord({"loss": loss, **metrics})
+        combined = {**metrics, **{f"val_{k}": v for k, v in val_metrics.items()}}
+        strategy.log_round(server_round, loss, combined)
+        return MetricRecord({"loss": loss, **combined})
 
     # Everything clients need travels in the training message.
     train_config = ConfigRecord(
