@@ -52,8 +52,10 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--no-clean-reference", action="store_true", help="skip the 0 %% malicious run")
     ap.add_argument("--seeds", type=int, nargs="+", default=[42])
     ap.add_argument("--rounds", type=int, default=20)
-    ap.add_argument("--local-epochs", type=int, default=1)
+    ap.add_argument("--local-epochs", type=int, default=2)
     ap.add_argument("--learning-rate", type=float, default=0.01)
+    ap.add_argument("--model-alpha", type=float, default=1e-4,
+                    help="SGDClassifier L2 regularization strength")
     ap.add_argument("--alpha", type=float, default=0.0, help="Dirichlet non-IID strength (0 = IID)")
     ap.add_argument("--poison-scale", type=float, default=3.0)
     ap.add_argument("--cpus-per-client", type=int, default=0, help="Ray CPUs per simulated client (0 = leave as is)")
@@ -89,7 +91,8 @@ def build_runs(args: argparse.Namespace) -> list[dict]:
                 "name": name, "clients": n,
                 "config": {
                     "num-server-rounds": args.rounds, "local-epochs": args.local_epochs,
-                    "learning-rate": args.learning_rate, "partition-alpha": args.alpha,
+                    "learning-rate": args.learning_rate, "model-alpha": args.model_alpha,
+                    "partition-alpha": args.alpha,
                     "seed": seed, "attack": attack, "malicious-fraction": frac,
                     "poison-scale": args.poison_scale, "aggregation": agg,
                     "run-name": name, "project-dir": ROOT.as_posix(),

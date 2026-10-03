@@ -83,25 +83,35 @@ It checks that no `Row_ID` appears in two splits, fits scaling on train only, an
 
 ### 3. Checkpoint 3 - centralized baseline (TM1)
 ```powershell
-python scripts/centralized_baseline.py
+python scripts/centralized_baseline.py --models logistic_sgd --sgd-alphas 1e-6 1e-5 1e-4 --sgd-epochs 5 --max-train-rows 100000
 ```
-Outputs `results/centralized/{metrics.csv, metrics.json, benchmark.csv}` for validation and test.
+The centralized SGD default is 5 epochs. For a quick alpha comparison, cap it at 100,000 rows as
+shown; omitting `--max-train-rows` intentionally trains on all rows and can take substantially longer.
+Choose the alpha with the highest **validation macro-F1** (not test macro-F1), then use it for the
+federated runs with `--model-alpha` or `model-alpha` in `--run-config`. The default sweep is
+`1e-6 1e-5 1e-4`. On the current 100,000-row, 5-epoch sweep, `1e-4` had the highest validation
+macro-F1, but the three results were effectively tied (spread < 0.000007); it is the provisional
+federated default until confirmed on the full data. Outputs `metrics.csv`, `metrics.json`, and
+`benchmark.csv` in `results/centralized/` for validation and test; the alpha is recorded in the
+metrics and benchmark.
 `logistic_sgd` is the fair comparison for the federated system (same model family); random forest and
 gradient boosting are stronger reference points.
 
 ### 4. Checkpoint 4 - federated system (TM1 + TM3)
 ```powershell
 # single run, 5 organisations, IID data
-flwr run . --stream --run-config "num-server-rounds=20 run-name='fed_c5_iid'"
+flwr run . --stream --run-config "num-server-rounds=20 local-epochs=2 model-alpha=1e-4 run-name='fed_c5_iid'"
 
 # TM3: heterogeneous (non-IID) organisations - the realistic case
 flwr run . --stream --run-config "num-server-rounds=20 partition-alpha=0.5 run-name='fed_c5_noniid'"
 
 # the full Stage 1 grid (3 and 5 clients, FedAvg, no attackers), 3 seeds
-python scripts/run_experiments.py --preset stage1 --rounds 20 --seeds 42 43 44
-python scripts/run_experiments.py --preset stage1 --rounds 20 --alpha 0.5    # non-IID grid
+python scripts/run_experiments.py --preset stage1 --rounds 20 --local-epochs 2 --model-alpha 1e-4 --seeds 42 43 44
+python scripts/run_experiments.py --preset stage1 --rounds 20 --alpha 0.5 --model-alpha 1e-4    # non-IID grid
 ```
-Per-round metrics land in `results/runs/<run>/rounds.csv`; the config used is saved beside it.
+The default SGD learning-rate schedule is decaying `invscaling` (`eta0=0.01`). Each client's training
+partition is randomly oversampled to balance its locally present classes; validation rows are not
+oversampled. Per-round metrics land in `results/runs/<run>/rounds.csv`; the config used is saved beside it.
 
 ### 5. Hand-off to Checkpoint 5 (TM2)
 ```powershell
@@ -114,8 +124,11 @@ python scripts/plot_results.py            # -> results/summary.md + results/figu
   numbers were produced on a different pipeline (StandardScaler only, `saga`/`lbfgs` solvers), so they are
   context, not a like-for-like benchmark.
 - CICIDS2017 is ~80 % BENIGN. Look at **balanced accuracy and macro-F1**, not accuracy.
-- Linear models (`logistic_sgd`) will trail random forests; that gap is a property of the model family, not of
-  federation. The Stage 1 claim to test is *federated logistic_sgd ~ centralized logistic_sgd*.
+- Linear models (`logistic_sgd`) will trail random forests; a macro-F1 in the 0.60s to low 0.70s can be
+  a realistic result, rather than the random forest's roughly 0.87. That gap is a property of the model
+  family, not of federation. The Stage 1 claim to test is *federated logistic_sgd ~ centralized logistic_sgd*.
+- Use the centralized validation sweep to select the regularization alpha; test data is for final reporting,
+  not hyperparameter selection.
 - Random forests cannot be averaged across clients, so they are centralized references only.
 
 ## Troubleshooting

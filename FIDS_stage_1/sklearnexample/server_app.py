@@ -50,6 +50,7 @@ def main(grid: Grid, context: Context) -> None:
         "malicious_fraction": mal_frac,
         "partition_alpha": float(cfg["partition-alpha"]),
         "local_epochs": int(cfg["local-epochs"]),
+        "model_alpha": float(cfg["model-alpha"]),
         "seed": int(cfg["seed"]),
     }
     log_path = Path(cfg["results-dir"]) / "runs" / str(cfg["run-name"]) / "rounds.csv"
@@ -66,7 +67,8 @@ def main(grid: Grid, context: Context) -> None:
 
     # Global model used for centralised evaluation on the held-out test set.
     eval_model = create_model(
-        meta["n_features"], meta["n_classes"], seed=int(cfg["seed"]), data_dir=ddir
+        meta["n_features"], meta["n_classes"], seed=int(cfg["seed"]), data_dir=ddir,
+        alpha=float(cfg["model-alpha"]),
     )
 
     def evaluate_fn(server_round: int, arrays: ArrayRecord) -> MetricRecord:
@@ -83,6 +85,7 @@ def main(grid: Grid, context: Context) -> None:
             "data-dir": ddir,
             "learning-rate": float(cfg["learning-rate"]),
             "local-epochs": int(cfg["local-epochs"]),
+            "model-alpha": float(cfg["model-alpha"]),
             "partition-alpha": float(cfg["partition-alpha"]),
             "seed": int(cfg["seed"]),
             "attack": attack,
@@ -93,7 +96,8 @@ def main(grid: Grid, context: Context) -> None:
 
     initial = ArrayRecord(
         get_model_params(create_model(
-            meta["n_features"], meta["n_classes"], seed=int(cfg["seed"]), data_dir=ddir
+            meta["n_features"], meta["n_classes"], seed=int(cfg["seed"]), data_dir=ddir,
+            alpha=float(cfg["model-alpha"]),
         ))
     )
     result = strategy.start(

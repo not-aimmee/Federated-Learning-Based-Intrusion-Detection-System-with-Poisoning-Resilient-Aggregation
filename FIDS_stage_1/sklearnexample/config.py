@@ -23,8 +23,9 @@ DEFAULTS: dict = {
     "num-server-rounds": 20,
     "fraction-train": 1.0,  # keep 1.0 so the malicious share is exact every round
     "fraction-evaluate": 0.0,  # 1.0 -> also collect per-client validation metrics
-    "local-epochs": 1,
+    "local-epochs": 2,
     "learning-rate": 0.01,
+    "model-alpha": 1e-4,
     "partition-alpha": 0.0,  # 0 = IID; small (e.g. 0.5) = strongly non-IID
     "seed": 42,
     "attack": "none",  # none | label_flip | model_poison

@@ -44,8 +44,10 @@ MODELS = ("logistic_sgd", "random_forest", "hist_gradient_boosting")
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("--models", nargs="+", choices=MODELS, default=list(MODELS))
-    ap.add_argument("--sgd-epochs", type=int, default=20)
+    ap.add_argument("--sgd-epochs", type=int, default=5)
     ap.add_argument("--learning-rate", type=float, default=0.01)
+    ap.add_argument("--sgd-alphas", type=float, nargs="+", default=[1e-6, 1e-5, 1e-4],
+                    help="L2 strengths to evaluate for logistic_sgd")
     ap.add_argument("--rf-class-weight", default="balanced_subsample",
                     help="RandomForest class_weight ('none' to disable)")
     ap.add_argument("--max-train-rows", type=int, default=0, help="subsample training rows (0 = all)")
@@ -69,33 +71,58 @@ def main() -> None:
     rf_weight = None if args.rf_class_weight.lower() == "none" else args.rf_class_weight
     rows = []
     for name in args.models:
-        print(f"\n== {name}")
-        t0 = time.perf_counter()
         if name == "logistic_sgd":
-            model = create_model(
-                meta["n_features"], meta["n_classes"], args.learning_rate, args.seed, data_dir=d
-            )
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                train_local(model, X_tr.astype(np.float64), y_tr, args.sgd_epochs)
+            X_sgd = X_tr.astype(np.float64)
+            for alpha in args.sgd_alphas:
+                print(f"\n== {name} (alpha={alpha:g})")
+                t0 = time.perf_counter()
+                model = create_model(
+                    meta["n_features"], meta["n_classes"], args.learning_rate, args.seed,
+                    data_dir=d, alpha=alpha,
+                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    train_local(model, X_sgd, y_tr, args.sgd_epochs)
+                train_time = time.perf_counter() - t0
+
+                for split, (X_ev, y_ev) in evals.items():
+                    t0 = time.perf_counter()
+                    pred = model.predict(X_ev.astype(np.float64))
+                    predict_time = time.perf_counter() - t0
+                    row = {"model": name, "alpha": alpha, "split": split,
+                           **compute_metrics(y_ev, pred), "train_time_s": train_time,
+                           "predict_time_s": predict_time}
+                    rows.append(row)
+                    print(f"  {split:<10} acc={row['accuracy']:.4f} "
+                          f"bal_acc={row['balanced_accuracy']:.4f} "
+                          f"macro_f1={row['macro_f1']:.4f} "
+                          f"attack_f1={row['f1']:.4f} fpr={row['fpr']:.4f}")
         elif name == "random_forest":
+            print(f"\n== {name}")
+            t0 = time.perf_counter()
             model = RandomForestClassifier(n_estimators=100, n_jobs=-1, random_state=args.seed,
                                            class_weight=rf_weight)
             model.fit(X_tr, y_tr)
+            train_time = time.perf_counter() - t0
         else:
+            print(f"\n== {name}")
+            t0 = time.perf_counter()
             model = HistGradientBoostingClassifier(random_state=args.seed)
             model.fit(X_tr, y_tr)
-        train_time = time.perf_counter() - t0
+            train_time = time.perf_counter() - t0
 
-        for split, (X_ev, y_ev) in evals.items():
-            t0 = time.perf_counter()
-            pred = model.predict(X_ev.astype(np.float64) if name == "logistic_sgd" else X_ev)
-            predict_time = time.perf_counter() - t0
-            row = {"model": name, "split": split, **compute_metrics(y_ev, pred),
-                   "train_time_s": train_time, "predict_time_s": predict_time}
-            rows.append(row)
-            print(f"  {split:<10} acc={row['accuracy']:.4f} bal_acc={row['balanced_accuracy']:.4f} "
-                  f"macro_f1={row['macro_f1']:.4f} attack_f1={row['f1']:.4f} fpr={row['fpr']:.4f}")
+        if name != "logistic_sgd":
+            for split, (X_ev, y_ev) in evals.items():
+                t0 = time.perf_counter()
+                pred = model.predict(X_ev)
+                predict_time = time.perf_counter() - t0
+                row = {"model": name, "split": split, **compute_metrics(y_ev, pred),
+                       "train_time_s": train_time, "predict_time_s": predict_time}
+                rows.append(row)
+                print(f"  {split:<10} acc={row['accuracy']:.4f} "
+                      f"bal_acc={row['balanced_accuracy']:.4f} "
+                      f"macro_f1={row['macro_f1']:.4f} "
+                      f"attack_f1={row['f1']:.4f} fpr={row['fpr']:.4f}")
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     df = pd.DataFrame(rows)
@@ -104,8 +131,13 @@ def main() -> None:
     bench = df.rename(columns={
         "model": "Model", "split": "Split", "accuracy": "Accuracy",
         "balanced_accuracy": "Balanced Accuracy", "macro_f1": "Macro F1", "weighted_f1": "Weighted F1",
-    })[["Model", "Split", "Accuracy", "Balanced Accuracy", "Macro F1", "Weighted F1"]]
-    bench["Model"] = "Centralized " + bench["Model"].astype(str)
+    })
+    bench["Model"] = bench.apply(
+        lambda row: (f"Centralized logistic_sgd (alpha={row['alpha']:g})"
+                     if row["Model"] == "logistic_sgd" else f"Centralized {row['Model']}"),
+        axis=1,
+    )
+    bench = bench[["Model", "Split", "Accuracy", "Balanced Accuracy", "Macro F1", "Weighted F1"]]
     bench.to_csv(args.out_dir / "benchmark.csv", index=False)
     print(f"\nSaved to {args.out_dir}  (metrics.csv, metrics.json, benchmark.csv)")
 

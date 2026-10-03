@@ -12,9 +12,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from sklearnexample.task import compute_metrics, create_model  # noqa: E402
+from sklearnexample.task import (  # noqa: E402
+    compute_metrics, create_model, load_client_data,
+)
 import prepare_from_splits  # noqa: E402
 import build_benchmark  # noqa: E402
+import centralized_baseline  # noqa: E402
 
 
 def _write_splits(dir_: Path, leak: bool = False) -> None:
@@ -53,6 +56,56 @@ def test_create_model_uses_balanced_weights_with_partial_fit(tmp_path):
     model = create_model(2, 2, data_dir=tmp_path)
 
     assert model.class_weight == pytest.approx({0: 5 / 6, 1: 1.25})
+    assert model.learning_rate == "invscaling"
+    assert model.eta0 == pytest.approx(0.01)
+    assert model.alpha == pytest.approx(1e-4)
+
+
+def test_client_training_data_oversamples_without_changing_validation(tmp_path):
+    y_train = np.array([0] * 80 + [1] * 20)
+    X_train = np.arange(len(y_train) * 2, dtype=np.float64).reshape(-1, 2)
+    np.save(tmp_path / "X_train.npy", X_train)
+    np.save(tmp_path / "y_train.npy", y_train)
+    np.save(tmp_path / "X_test.npy", np.zeros((1, 2)))
+    np.save(tmp_path / "y_test.npy", np.array([0]))
+
+    X_local, y_local, X_val, y_val = load_client_data(
+        0, 1, seed=7, val_fraction=0.01, data_dir=tmp_path
+    )
+
+    assert len(X_local) > 99
+    assert len(X_local) == len(y_local)
+    assert len(X_val) == len(y_val) == 1
+    counts = np.unique(y_local, return_counts=True)[1]
+    assert counts[0] == counts[1]
+
+
+def test_centralized_baseline_sweeps_and_records_sgd_alphas(tmp_path, monkeypatch):
+    rng = np.random.default_rng(11)
+    y_train = np.array([0] * 20 + [1] * 20)
+    X_train = (rng.normal(size=(len(y_train), 3)) + y_train[:, None]).astype(np.float32)
+    for name, X, y in (
+        ("train", X_train, y_train),
+        ("val", X_train[[0, 19, 20, 39]], y_train[[0, 19, 20, 39]]),
+        ("test", X_train[[1, 18, 21, 38]], y_train[[1, 18, 21, 38]]),
+    ):
+        np.save(tmp_path / f"X_{name}.npy", X)
+        np.save(tmp_path / f"y_{name}.npy", y)
+    (tmp_path / "meta.json").write_text(json.dumps({"n_features": 3, "n_classes": 2}))
+    out_dir = tmp_path / "results"
+    monkeypatch.setattr(sys, "argv", [
+        "centralized_baseline.py", "--models", "logistic_sgd", "--sgd-epochs", "1",
+        "--sgd-alphas", "0.0001", "0.001", "--data-dir", str(tmp_path),
+        "--out-dir", str(out_dir),
+    ])
+
+    centralized_baseline.main()
+
+    metrics = pd.read_csv(out_dir / "metrics.csv")
+    benchmark = pd.read_csv(out_dir / "benchmark.csv")
+    assert set(metrics["alpha"]) == {0.0001, 0.001}
+    assert len(metrics) == 4
+    assert benchmark["Model"].str.contains(r"alpha=(?:0.0001|0.001)").all()
 
 
 def test_federated_benchmark_reports_best_and_final_rounds(tmp_path):
@@ -61,18 +114,18 @@ def test_federated_benchmark_reports_best_and_final_rounds(tmp_path):
     pd.DataFrame([
         {"attack": "none", "round": 0, "aggregation": "fedavg", "clients": 3,
          "partition_alpha": 0, "accuracy": 0.7, "balanced_accuracy": 0.3,
-         "macro_f1": 0.2, "weighted_f1": 0.6},
+         "macro_f1": 0.2, "weighted_f1": 0.6, "val_macro_f1": 0.4},
         {"attack": "none", "round": 1, "aggregation": "fedavg", "clients": 3,
          "partition_alpha": 0, "accuracy": 0.8, "balanced_accuracy": 0.6,
-         "macro_f1": 0.5, "weighted_f1": 0.75},
+         "macro_f1": 0.5, "weighted_f1": 0.75, "val_macro_f1": 0.7},
         {"attack": "none", "round": 2, "aggregation": "fedavg", "clients": 3,
          "partition_alpha": 0, "accuracy": 0.85, "balanced_accuracy": 0.55,
-         "macro_f1": 0.45, "weighted_f1": 0.8},
+         "macro_f1": 0.45, "weighted_f1": 0.8, "val_macro_f1": 0.6},
     ]).to_csv(run_dir / "rounds.csv", index=False)
 
     rows = build_benchmark.federated_rows(tmp_path)
 
-    assert [row["Selection"] for row in rows] == ["final", "best_test_macro_f1"]
+    assert [row["Selection"] for row in rows] == ["final", "best_val_macro_f1"]
     assert [row["Round"] for row in rows] == [2, 1]
     assert [row["Macro F1"] for row in rows] == [0.45, 0.5]
 

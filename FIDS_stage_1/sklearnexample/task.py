@@ -103,12 +103,34 @@ def load_client_data(
     def take(name: str, rows: np.ndarray, dtype) -> np.ndarray:
         return np.asarray(arrays[name][rows], dtype=dtype)
 
+    X_train = take("X_train", tr_idx, np.float64)
+    y_train = take("y_train", tr_idx, np.int64)
+    X_train, y_train = _random_oversample(
+        X_train, y_train, int(seed) + 2000 + int(partition_id)
+    )
     return (
-        take("X_train", tr_idx, np.float64),
-        take("y_train", tr_idx, np.int64),
+        X_train,
+        y_train,
         take("X_train", val_idx, np.float64),
         take("y_train", val_idx, np.int64),
     )
+
+
+def _random_oversample(X: np.ndarray, y: np.ndarray, seed: int) -> tuple[np.ndarray, np.ndarray]:
+    """Balance the local training labels by repeating existing examples."""
+    classes, counts = np.unique(y, return_counts=True)
+    target = int(counts.max())
+    rng = np.random.default_rng(seed)
+    extra = [
+        rng.choice(np.flatnonzero(y == label), size=target - int(count), replace=True)
+        for label, count in zip(classes, counts)
+        if count < target
+    ]
+    if extra:
+        indices = np.concatenate((np.arange(len(y)), *extra))
+        rng.shuffle(indices)
+        return X[indices], y[indices]
+    return X, y
 
 
 @lru_cache(maxsize=2)
@@ -120,15 +142,13 @@ def load_test_data(data_dir: str | None = None):
         np.asarray(arrays["y_test"], dtype=np.int64),
     )
 
-_FILES = ("X_train", "y_train", "X_test", "y_test", "X_val", "y_val")  # add X_val, y_val
-
 @lru_cache(maxsize=2)
 def load_validation_data(data_dir: str | None = None):
     """Held-out global validation set (used only to pick the best round, never for tuning weights)."""
-    arrays = _arrays(_resolve(data_dir))
+    path = Path(_resolve(data_dir))
     return (
-        np.asarray(arrays["X_val"], dtype=np.float64),
-        np.asarray(arrays["y_val"], dtype=np.int64),
+        np.asarray(np.load(path / "X_val.npy", mmap_mode="r"), dtype=np.float64),
+        np.asarray(np.load(path / "y_val.npy", mmap_mode="r"), dtype=np.int64),
     )
 
 
@@ -139,15 +159,16 @@ def create_model(
     learning_rate: float = 0.01,
     seed: int = 42,
     data_dir: str | Path | None = None,
+    alpha: float = 1e-4,
 ) -> SGDClassifier:
     """Logistic regression (SGD) with all-zero initial parameters."""
     class_weight = dict(_balanced_class_weights(_resolve(data_dir)))
     model = SGDClassifier(
         loss="log_loss",
         penalty="l2",
-        alpha=1e-5,
+        alpha=alpha,
         class_weight=class_weight,
-        learning_rate="constant",
+        learning_rate="invscaling",
         eta0=learning_rate,
         random_state=seed,
         shuffle=True,
